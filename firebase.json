@@ -1,0 +1,106 @@
+// ─── src/firebase.js ─────────────────────────────────────────────────────────
+// STEP 1: Replace these values with YOUR Firebase project config.
+// Get them from: https://console.firebase.google.com
+//   → Your Project → Project Settings → Your Apps → Web App → SDK config
+//
+// STEP 2: In Firebase Console:
+//   → Authentication → Sign-in method → Google → Enable
+//
+// STEP 3: In Google Cloud Console (https://console.cloud.google.com):
+//   → APIs & Services → Credentials → OAuth 2.0 Client (auto-created by Firebase)
+//   → Add your domain to "Authorized JavaScript origins"
+//   → e.g.  https://careermap-yourname.web.app
+//            https://careermap-yourname.firebaseapp.com
+//            http://localhost:3000  (for local dev)
+// ─────────────────────────────────────────────────────────────────────────────
+
+import { initializeApp } from "firebase/app";
+import {
+  getAuth,
+  GoogleAuthProvider,
+  signInWithPopup,
+  signOut,
+  onAuthStateChanged,
+} from "firebase/auth";
+import { getFirestore, doc, getDoc, setDoc, updateDoc } from "firebase/firestore";
+
+// 🔴 REPLACE WITH YOUR CONFIG:
+const firebaseConfig = {
+  apiKey:            "YOUR_API_KEY",
+  authDomain:        "YOUR_PROJECT_ID.firebaseapp.com",
+  projectId:         "YOUR_PROJECT_ID",
+  storageBucket:     "YOUR_PROJECT_ID.appspot.com",
+  messagingSenderId: "YOUR_SENDER_ID",
+  appId:             "YOUR_APP_ID",
+};
+
+const app      = initializeApp(firebaseConfig);
+export const auth = getAuth(app);
+export const db   = getFirestore(app);
+
+const provider = new GoogleAuthProvider();
+provider.setCustomParameters({ prompt: "select_account" });
+
+// ── Auth helpers ──────────────────────────────────────────────────────────────
+
+/** Sign in with Google popup — returns Firebase User object */
+export async function signInWithGoogle() {
+  const result = await signInWithPopup(auth, provider);
+  return result.user;
+}
+
+/** Sign out current user */
+export async function signOutUser() {
+  await signOut(auth);
+}
+
+/** Listen for auth state changes */
+export function onAuthChange(callback) {
+  return onAuthStateChanged(auth, callback);
+}
+
+// ── Firestore user data helpers ───────────────────────────────────────────────
+
+/** Get user's app data (plan, history) from Firestore */
+export async function getUserData(uid) {
+  try {
+    const snap = await getDoc(doc(db, "users", uid));
+    return snap.exists() ? snap.data() : null;
+  } catch (e) {
+    console.error("getUserData error:", e);
+    return null;
+  }
+}
+
+/** Create or update user document in Firestore */
+export async function upsertUser(uid, data) {
+  try {
+    const ref = doc(db, "users", uid);
+    const snap = await getDoc(ref);
+    if (snap.exists()) {
+      await updateDoc(ref, data);
+    } else {
+      await setDoc(ref, { plan: "free", history: [], createdAt: Date.now(), ...data });
+    }
+  } catch (e) {
+    console.error("upsertUser error:", e);
+  }
+}
+
+/** Save roadmap history entry for a user */
+export async function saveHistory(uid, historyArray) {
+  try {
+    await updateDoc(doc(db, "users", uid), { history: historyArray });
+  } catch (e) {
+    console.error("saveHistory error:", e);
+  }
+}
+
+/** Update subscription plan for a user */
+export async function savePlan(uid, plan) {
+  try {
+    await updateDoc(doc(db, "users", uid), { plan });
+  } catch (e) {
+    console.error("savePlan error:", e);
+  }
+}
